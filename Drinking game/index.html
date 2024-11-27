@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Challenge Drinking Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            max-width: 100%;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            text-align: center;
+        }
+        #playerInput, .btn {
+            padding: 12px;
+            margin: 10px 0;
+            width: 100%;
+            max-width: 300px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+        }
+        #playerInput {
+            background-color: #16213e;
+            color: #ffffff;
+        }
+        .btn {
+            background-color: #0f3460;
+            color: #ffffff;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .btn:hover {
+            background-color: #536dfe;
+        }
+        .btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        #playerList {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .player-chip {
+            background-color: #0f3460;
+            padding: 10px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal {
+            background-color: #16213e;
+            padding: 20px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            position: relative;
+        }
+        .modal-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #0f3460;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 24px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Music Challenge Drinking Game 🎵🍺</h1>
+        <div id="playerSetup">
+            <input type="text" id="playerInput" placeholder="Enter Player Name">
+            <button class="btn" onclick="addPlayer()">Add Player</button>
+            <button class="btn" id="startGameBtn" onclick="startGame()" disabled>Start Game</button>
+        </div>
+        <div id="playerList"></div>
+        <div id="challengeDisplay"></div>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay">
+        <div class="modal" id="challenge-modal">
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+            <h2 id="modal-title"></h2>
+            <div id="modal-content"></div>
+            <div class="modal-buttons">
+                <button class="btn" id="modal-cancel-btn">Cancel</button>
+                <button class="btn" id="modal-submit-btn">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let players = [];
+        let currentChallenge = null;
+
+        const challenges = [
+    {
+        name: "Favorite Artist Song",
+        setup: (players) => {
+            const artist = randomArtist(); // Generates a random artist
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            modalTitle.textContent = `Favorite ${artist} Song Challenge`;
+
+            modalContent.innerHTML = `
+                <p>Each player, name your favorite ${artist} song!</p>
+                ${players.map(player => `
+                    <input type="password" class="modal-input player-song"
+                           data-player="${player}"
+                           placeholder="${player}'s ${artist} Song">
+                `).join('')}
+            `;
+
+            document.getElementById('modal-submit-btn').onclick = () => {
+                const songInputs = document.querySelectorAll('.player-song');
+                const songResponses = Array.from(songInputs).map(input => ({
+                    player: input.dataset.player,
+                    song: input.value.trim()
+                }));
+
+                const duplicateSongs = songResponses.filter((response, index, self) =>
+                    self.findIndex(r => r.song.toLowerCase() === response.song.toLowerCase() && r.song !== '') !== index
+                );
+
+                const resultText = duplicateSongs.length > 0
+                    ? `Penalty for players with duplicate ${artist} songs: ${duplicateSongs.map(d => d.player).join(', ')}`
+                    : "No duplicates found!";
+
+                displayResult(resultText);
+            };
+
+            openModal();
+        }
+    },
+    {
+        name: "Genre Showdown",
+        setup: (players) => {
+            const genre = randomGenre(); // Generates a random genre
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            modalTitle.textContent = `${genre} Showdown`;
+
+            const competitors = players.slice(0, 2);
+            const otherJudges = players.filter(p => !competitors.includes(p));
+
+            modalContent.innerHTML = `
+                <p>${genre} Showdown: ${competitors[0]} vs ${competitors[1]}</p>
+                ${competitors.map(player => `
+                    <input type="text" class="modal-input competitor-song"
+                           data-player="${player}"
+                           placeholder="${player}'s ${genre} Song">
+                `).join('')}
+                <p>Judges (${otherJudges.join(', ')}), choose the weaker ${genre} performance:</p>
+                <select class="modal-input" id="judge-vote">
+                    ${competitors.map(player => `
+                        <option value="${player}">${player}</option>
+                    `).join('')}
+                </select>
+            `;
+
+            document.getElementById('modal-submit-btn').onclick = () => {
+                const loser = document.getElementById('judge-vote').value;
+                displayResult(`Penalty for ${loser} in the ${genre} showdown!`);
+            };
+
+            openModal();
+        }
+    },
+    {
+        name: "Lyric Knowledge",
+        setup: (players) => {
+            const artist = randomArtist();
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            modalTitle.textContent = `${artist} Lyric Challenge`;
+
+            modalContent.innerHTML = `
+                <p>Each player, name a lyric from a ${artist} song. Judges will decide if it's valid!</p>
+                ${players.map(player => `
+                    <input type="text" class="modal-input player-lyric"
+                           data-player="${player}"
+                           placeholder="${player}'s ${artist} Lyric">
+                `).join('')}
+                <p>Judges (${players.join(', ')}), validate the entries after submission.</p>
+            `;
+
+            document.getElementById('modal-submit-btn').onclick = () => {
+                const lyricInputs = document.querySelectorAll('.player-lyric');
+                const lyricResponses = Array.from(lyricInputs).map(input => ({
+                    player: input.dataset.player,
+                    lyric: input.value.trim()
+                }));
+
+                const invalidEntries = lyricResponses.filter(response => response.lyric === '');
+                const resultText = invalidEntries.length > 0
+                    ? `Penalty for invalid entries: ${invalidEntries.map(i => i.player).join(', ')}`
+                    : "All lyrics submitted were valid!";
+
+                displayResult(resultText);
+            };
+
+            openModal();
+        }
+    },
+    {
+        name: "Song Matchup",
+        setup: (players) => {
+            const genre = randomGenre();
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            modalTitle.textContent = `Song Matchup (${genre})`;
+
+            modalContent.innerHTML = `
+                <p>Each player, submit the best song you know in the ${genre} genre. Judges will pick the best!</p>
+                ${players.map(player => `
+                    <input type="text" class="modal-input player-song"
+                           data-player="${player}"
+                           placeholder="${player}'s ${genre} Song">
+                `).join('')}
+            `;
+
+            document.getElementById('modal-submit-btn').onclick = () => {
+                const songInputs = document.querySelectorAll('.player-song');
+                const songResponses = Array.from(songInputs).map(input => ({
+                    player: input.dataset.player,
+                    song: input.value.trim()
+                }));
+
+                const validSongs = songResponses.filter(response => response.song !== '');
+                const winner = validSongs[Math.floor(Math.random() * validSongs.length)];
+
+                const resultText = winner
+                    ? `The winner is ${winner.player} with the song "${winner.song}"!`
+                    : "No valid songs were submitted.";
+
+                displayResult(resultText);
+            };
+
+            openModal();
+        }
+    },
+    {
+        name: "Song Memory Challenge",
+        setup: (players) => {
+            const artist = randomArtist();
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            modalTitle.textContent = `Memory Challenge (${artist})`;
+
+            modalContent.innerHTML = `
+                <p>Each player, name a unique song by ${artist}. No repeats allowed!</p>
+                ${players.map(player => `
+                    <input type="text" class="modal-input player-song"
+                           data-player="${player}"
+                           placeholder="${player}'s ${artist} Song">
+                `).join('')}
+            `;
+
+            document.getElementById('modal-submit-btn').onclick = () => {
+                const songInputs = document.querySelectorAll('.player-song');
+                const songResponses = Array.from(songInputs).map(input => ({
+                    player: input.dataset.player,
+                    song: input.value.trim()
+                }));
+
+                const duplicateSongs = songResponses.filter((response, index, self) =>
+                    self.findIndex(r => r.song.toLowerCase() === response.song.toLowerCase() && r.song !== '') !== index
+                );
+
+                const resultText = duplicateSongs.length > 0
+                    ? `Penalty for duplicate entries: ${duplicateSongs.map(d => d.player).join(', ')}`
+                    : "All songs submitted were unique!";
+
+                displayResult(resultText);
+            };
+
+            openModal();
+        }
+    }
+];
+
+/**
+ * Helper function to get a random artist.
+ */
+function randomArtist() {
+    const artists = ["Taylor Swift", "Beyoncé", "Drake", "Adele", "Ed Sheeran", "Kanye West"];
+    return artists[Math.floor(Math.random() * artists.length)];
+}
+
+/**
+ * Helper function to get a random genre.
+ */
+function randomGenre() {
+    const genres = ["Pop", "Rock", "Hip-Hop", "Jazz", "Country", "Classical"];
+    return genres[Math.floor(Math.random() * genres.length)];
+}
+
+
+
+        function addPlayer() {
+            const playerInput = document.getElementById('playerInput');
+            const playerList = document.getElementById('playerList');
+            const startGameBtn = document.getElementById('startGameBtn');
+
+            if (playerInput.value.trim()) {
+                players.push(playerInput.value.trim());
+                const playerDiv = document.createElement('div');
+                playerDiv.classList.add('player-chip');
+                playerDiv.textContent = playerInput.value;
+                playerList.appendChild(playerDiv);
+                playerInput.value = '';
+
+                if (players.length >= 2) {
+                    startGameBtn.disabled = false;
+                }
+            }
+        }
+
+        function startGame() {
+            if (players.length < 2) {
+                alert('Need at least 2 players!');
+                return;
+            }
+
+            currentChallenge = challenges[Math.floor(Math.random() * challenges.length)];
+            currentChallenge.setup(players);
+        }
+
+        function openModal() {
+            document.getElementById('modal-overlay').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
+
+        function displayResult(resultText) {
+            const challengeDisplay = document.getElementById('challengeDisplay');
+            challengeDisplay.innerHTML = `
+                <div class="modal" style="margin-top: 20px;">
+                    <h2>Challenge Result</h2>
+                    <p>${resultText}</p>
+                    <button class="btn" onclick="startGame()">Next Challenge</button>
+                </div>
+            `;
+            closeModal();
+        }
+    </script>
+</body>
+</html>
